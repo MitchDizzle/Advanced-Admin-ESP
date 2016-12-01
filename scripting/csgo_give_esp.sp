@@ -3,14 +3,15 @@
 #tryinclude <CustomPlayerSkins> // for colored glow
 
 #define PLUGIN_NAME    "CS:GO Give ESP"
-#define PLUGIN_VERSION "1.0.0"
+#define PLUGIN_VERSION "1.1.0"
 
 ConVar AdminESP_Color[2];
 bool isUsingESP[MAXPLAYERS+1];
 bool glowsSetup = false;
+int playersInESP = 0;
 ConVar sv_force_transmit_players;
 
-public Plugin:myinfo = {
+public Plugin myinfo = {
 	name        = PLUGIN_NAME,
 	author      = "Mitch",
 	description = "Give players ESP/WH",
@@ -24,11 +25,15 @@ public OnPluginStart() {
 	CreateConVar("sm_csgo_giveesp_version", PLUGIN_VERSION, PLUGIN_NAME, FCVAR_NOTIFY|FCVAR_DONTRECORD);
 	AdminESP_Color[0] = CreateConVar("sm_csgo_giveesp_tcolor",  "192 160 96 64", "Determines R G B A glow colors for Terrorists team\nSet to \"0 0 0 0\" to disable",                      0);
 	AdminESP_Color[1] = CreateConVar("sm_csgo_giveesp_ctcolor", "96 128 192 64", "Determines R G B A glow colors for Counter-Terrorists team\nFormat should be \"R G B A\" (with spaces)", 0);
+	AdminESP_Default = CreateConVar("sm_csgo_giveesp_default", "0", "Set to 1 if admins should automatically be given ESP", 0);
 
 	RegAdminCmd("sm_giveesp", Command_GiveESP, ADMFLAG_CHEATS);
-
+	
 	AutoExecConfig(true, "csgo_give_esp");
 	HookEvent("round_end", Event_RoundEnd);
+	HookEvent("player_spawn", Event_Spawn);
+	
+	playersInESP = 0;
 }
 
 public OnPluginEnd() {
@@ -36,11 +41,20 @@ public OnPluginEnd() {
 }
 
 public void OnMapStart() {
-	removeGlows();
+	restPlayerVars(0);
 }
 
 public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast) {
 	removeGlows();
+	return Plugin_Continue;
+}
+
+public Action Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast) {
+	if(playersInESP > 0) {
+		int client = GetClientOfUserId(event.GetInt("userid"));
+		if(client > 0 && client <= MaxClients && IsClientInGame(client)) {
+			createPlayerGlow(client);
+		}
 	return Plugin_Continue;
 }
 
@@ -49,7 +63,7 @@ public void toggleGlow(int client, bool value) {
 	setupGlows();
 }
 
-public Action:Command_GiveESP(client, args) {
+public Action Command_GiveESP(client, args) {
 	if(args < 1) {
 		ReplyToCommand(client, "[SM] sm_giveesp <player/#userid> [0/1]");
 		return Plugin_Handled;
@@ -78,6 +92,20 @@ public Action:Command_GiveESP(client, args) {
 		}
 	}
 	return Plugin_Handled;
+}
+
+public void restPlayerVars(int client) {
+	if(client == 0) {
+		for(int i = 1; i <= MaxClients; i++) {
+			resetPlayerVars(i);
+		}
+		return;
+	}
+	if(isUsingESP[client]) {
+		isUsingESP[client] = false;
+		playersInESP--;
+	}
+	checkGlows();
 }
 
 public void setupGlows() {
@@ -117,7 +145,6 @@ public void displayGlows(bool display) {
 
 public void removeGlows() {
 	for(int client = 1; client <= MaxClients; client++) {
-		isUsingESP[client] = false;
 		if(glowsSetup && IsClientInGame(client)) {
 			CPS_RemoveSkin(client, CPS_RENDER);
 		}
