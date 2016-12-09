@@ -1,0 +1,18 @@
+"Phrases"
+{
+	"ESP Off"
+	{
+		"#format"		"{1:s}"
+		"en"			"took ESP from {1}."
+	}
+	"ESP On"
+	{
+		"#format"		"{1:s}"
+		"en"			"gave ESP to {1}."
+	}
+	"ESP Toggle"
+	{
+		"#format"		"{1:s}"
+		"en"			"toggled ESP on {1}."
+	}
+}
