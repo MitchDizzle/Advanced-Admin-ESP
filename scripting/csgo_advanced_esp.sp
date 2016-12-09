@@ -1,20 +1,30 @@
+#include <sdktools>
 #include <sdkhooks>
-#include <CustomPlayerSkins>
 
-#define PLUGIN_NAME    "Advanced Admin ESP"
-#define PLUGIN_VERSION "1.2.1"
+#define EF_BONEMERGE                (1 << 0)
+#define EF_NOSHADOW                 (1 << 4)
+#define EF_NORECEIVESHADOW          (1 << 6)
 
 ConVar cColor[2];
 ConVar cDefault;
 ConVar cLifeState;
 ConVar cNotify;
+ConVar cTeam;
 
 int colors[2][4];
 
 bool isUsingESP[MAXPLAYERS+1];
+bool canSeeESP[MAXPLAYERS+1];
 int playersInESP = 0;
 ConVar sv_force_transmit_players;
 
+int playerModels[MAXPLAYERS+1] = {INVALID_ENT_REFERENCE,...};
+int playerModelsIndex[MAXPLAYERS+1] = {-1,...};
+
+int playerTeam[MAXPLAYERS+1] = {0,...};
+
+#define PLUGIN_NAME    "Advanced Admin ESP"
+#define PLUGIN_VERSION "1.3.0"
 public Plugin myinfo = {
 	name        = PLUGIN_NAME,
 	author      = "Mitch",
@@ -27,15 +37,17 @@ public OnPluginStart() {
 	sv_force_transmit_players = FindConVar("sv_force_transmit_players");
 	// Create plugin console variables on success
 	CreateConVar("sm_advanced_esp_version", PLUGIN_VERSION, PLUGIN_NAME, FCVAR_NOTIFY|FCVAR_DONTRECORD);
-	cColor[0] = CreateConVar("sm_advanced_esp_tcolor",  "192 160 96 64", "Determines R G B A glow colors for Terrorists team\nSet to \"0 0 0 0\" to disable",                      0);
-	cColor[1] = CreateConVar("sm_advanced_esp_ctcolor", "96 128 192 64", "Determines R G B A glow colors for Counter-Terrorists team\nFormat should be \"R G B A\" (with spaces)", 0);
+	cColor[0] = CreateConVar("sm_advanced_esp_tcolor",  "144 120 72", "Determines R G B glow colors for Terrorists team\nFormat should be \"R G B\" (with spaces)", 0);
+	cColor[1] = CreateConVar("sm_advanced_esp_ctcolor", "72 96 144", "Determines R G B glow colors for Counter-Terrorists team\nFormat should be \"R G B\" (with spaces)", 0);
 	cDefault = CreateConVar("sm_advanced_esp_default", "0", "Set to 1 if admins should automatically be given ESP", 0);
 	cLifeState = CreateConVar("sm_advanced_esp_lifestate", "0", "Set to 1 if admins should only see esp when dead, 2 to only see esp while alive, 0 dead or alive.", 0);
 	cNotify = CreateConVar("sm_advanced_esp_notify", "0", "Set to 1 if giving and setting esp should notify the rest of the server.", 0);
+	cTeam = CreateConVar("sm_advanced_esp_team", "0", "0 - Display all teams, 1 - Display enemy, 2 - Display teammates", 0);
 	AutoExecConfig(true, "csgo_advanced_esp");
 	cColor[0].AddChangeHook(ConVarChange);
 	cColor[1].AddChangeHook(ConVarChange);
 	cLifeState.AddChangeHook(ConVarChange);
+	cTeam.AddChangeHook(ConVarChange);
 	for(int i = 0; i <= 1; i++) {
 		retrieveColorValue(i);
 	}
@@ -48,6 +60,7 @@ public OnPluginStart() {
 
 	HookEvent("player_spawn", Event_PlayerSpawn);
 	HookEvent("player_death", Event_PlayerDeath);
+
 	playersInESP = 0;
 }
 
@@ -64,8 +77,8 @@ public void retrieveColorValue(int index) {
 	char pieces[4][16];
 	char color[64];
 	cColor[index].GetString(color, sizeof(color));
-	if(ExplodeString(color, " ", pieces, sizeof(pieces), sizeof(pieces[])) == 4) {
-		for(int j = 0; j <= 3; j++) {
+	if(ExplodeString(color, " ", pieces, sizeof(pieces), sizeof(pieces[])) >= 3) {
+		for(int j = 0; j < 3; j++) {
 			colors[index][j] = StringToInt(pieces[j]);
 		}
 	}
@@ -143,17 +156,46 @@ public void OnClientDisconnect(int client) {
 	resetPlayerVars(client);
 }
 
+public void OnClientPutInServer(int client) {
+	resetPlayerVars(client);
+}
+
+public void Event_PlayerTeam(Event event, const char[] name, bool dontBroadcast) {
+	int client = GetClientOfUserId(event.GetInt("userid"));
+	if(client <= 0 || client > MaxClients || !IsClientInGame(client)) {
+		return;
+	}
+	playerTeam[client] = GetClientTeam(client);
+}
+
 public void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast) {
+	int client = GetClientOfUserId(event.GetInt("userid"));
+	if(client <= 0 || client > MaxClients || !IsClientInGame(client)) {
+		return;
+	}
 	if(cDefault.BoolValue) {
-		int client = GetClientOfUserId(event.GetInt("userid"));
-		if(client > 0 && client <= MaxClients && IsClientInGame(client) && CheckCommandAccess(client, "sm_esp", ADMFLAG_CHEATS, false)) {
+		if(CheckCommandAccess(client, "sm_esp", ADMFLAG_CHEATS, false)) {
 			isUsingESP[client] = true;
+		}
+	}
+	if(isUsingESP[client]) {
+		if(cLifeState.IntValue != 1) {
+			canSeeESP[client] = true;
+		} else {
+			canSeeESP[client] = false;
 		}
 	}
 	checkGlows();
 }
 
 public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast) {
+	if(cLifeState.IntValue == 1) {
+		//Display glow to the dead.
+		int client = GetClientOfUserId(event.GetInt("userid"));
+		if(client > 0 && client <= MaxClients && IsClientInGame(client) && isUsingESP[client]) {
+			canSeeESP[client] = true;
+		}
+	}
 	checkGlows();
 }
 
@@ -170,16 +212,38 @@ public void resetPlayerVars(int client) {
 		return;
 	}
 	if(isUsingESP[client]) {
-		isUsingESP[client] = false;
 		playersInESP--;
 	}
+	isUsingESP[client] = false;
+	playerTeam[client] = 0;
+	if(IsClientInGame(client)) {
+		playerTeam[client] = GetClientTeam(client);
+	}
+}
+
+public bool getCanSeeEsp(int client, int lifestate) {
+	if(IsPlayerAlive(client)) {
+		if(lifestate != 1) {
+			return true;
+		}
+	} else {
+		if(lifestate == 1) {
+			return true;
+		}
+	}
+	return false;
 }
 
 public void checkGlows() {
 	//Check to see if some one has a glow enabled.
 	playersInESP = 0;
+	int lifestate = cLifeState.IntValue;
 	for(int client = 1; client <= MaxClients; client++) {
-		if(isUsingESP[client]) {
+		if(!IsClientInGame(client)) {
+			continue;
+		}
+		canSeeESP[client] = getCanSeeEsp(client, lifestate);
+		if(isUsingESP[client] && canSeeESP[client]) {
 			playersInESP++;
 		}
 	}
@@ -197,7 +261,7 @@ public void checkGlows() {
 public void destoryGlows() {
 	for(int client = 1; client <= MaxClients; client++) {
 		if(IsClientInGame(client)) {
-			CPS_RemoveSkin(client);
+			RemoveSkin(client);
 		}
 	}
 }
@@ -205,39 +269,62 @@ public void destoryGlows() {
 public void createGlows() {
 	char model[PLATFORM_MAX_PATH];
 	int skin = -1;
-	int team = 0;
+	int showTeam = cTeam.IntValue;
 	//Loop and setup a glow on alive players.
 	for(int client = 1; client <= MaxClients; client++) {
-		//Ignore dead and bots
-		if(!IsClientInGame(client) || !IsPlayerAlive(client)) {// || IsFakeClient(client)) {
+		if(!IsClientInGame(client) || !IsPlayerAlive(client)) {
 			continue;
 		}
 		//Create Skin
 		GetClientModel(client, model, sizeof(model));
-		skin = CPS_SetSkin(client, model, CPS_RENDER|CPS_TRANSMIT);
-		if(skin > MaxClients && SDKHookEx(skin, SDKHook_SetTransmit, OnSetTransmit)) {
-			team = GetClientTeam(client)-2;
-			if(team >= 0) {
-				SetupGlow(skin, colors[team]);
+		skin = CreatePlayerModelProp(client, model);
+		if(skin > MaxClients) {
+			playerTeam[client] = GetClientTeam(client);
+			if(showTeam == 1) {
+				//Display Enemys
+				if(playerTeam[client] == 3 && SDKHookEx(skin, SDKHook_SetTransmit, OnSetTransmit_T) || 
+				   playerTeam[client] == 2 && SDKHookEx(skin, SDKHook_SetTransmit, OnSetTransmit_CT)) {
+					setGlowTeam(skin, playerTeam[client]);
+				}
+			} else if(showTeam == 2) {
+				//Display Teammates
+				if(playerTeam[client] == 2 && SDKHookEx(skin, SDKHook_SetTransmit, OnSetTransmit_T) || 
+				   playerTeam[client] == 3 && SDKHookEx(skin, SDKHook_SetTransmit, OnSetTransmit_CT)) {
+					setGlowTeam(skin, playerTeam[client]);
+				}
+			} else {
+				if(SDKHookEx(skin, SDKHook_SetTransmit, OnSetTransmit_All)) {
+					setGlowTeam(skin, playerTeam[client]);
+				}
 			}
 		}
 	}
 }
 
-public Action OnSetTransmit(int entity, int client) {
-	if(isUsingESP[client] && EntRefToEntIndex(CPS_GetSkin(client)) != entity && getLifeState(client)) {
+public setGlowTeam(int skin, int team) {
+	if(team >= 2) {
+		SetupGlow(skin, colors[team-2]);
+	}
+}
+
+public Action OnSetTransmit_All(int entity, int client) {
+	if(isUsingESP[client] && canSeeESP[client] && playerModelsIndex[client] != entity) {
 		return Plugin_Continue;
 	}
 	return Plugin_Handled;
 }
-
-public bool getLifeState(int client) {
-	switch(cLifeState.IntValue) {
-		case 1: return !IsPlayerAlive(client); //Only see glows when player is dead.
-		case 2: return IsPlayerAlive(client); //Only see glows when player is alive.
-		default: return true;
+	
+public Action OnSetTransmit_T(int entity, int client) {
+	if(isUsingESP[client] && canSeeESP[client] && playerModelsIndex[client] != entity && playerTeam[client] == 2) {
+		return Plugin_Continue;
 	}
-	return false;
+	return Plugin_Handled;
+}
+public Action OnSetTransmit_CT(int entity, int client) {
+	if(isUsingESP[client] && canSeeESP[client] && playerModelsIndex[client] != entity && playerTeam[client] == 3) {
+		return Plugin_Continue;
+	}
+	return Plugin_Handled;
 }
 
 public void SetupGlow(int entity, int color[4]) {
@@ -254,10 +341,41 @@ public void SetupGlow(int entity, int color[4]) {
 	SetEntPropFloat(entity, Prop_Send, "m_flGlowMaxDist", 10000.0);
 
 	// So now setup given glow colors for the skin
-	for(int i=0;i<4;i++) {
+	for(int i=0;i<3;i++) {
 		SetEntData(entity, offset + i, color[i], _, true); 
 	}
 }
+
+
+public int CreatePlayerModelProp(int client, char[] sModel) {
+	RemoveSkin(client);
+	int skin = CreateEntityByName("prop_dynamic_override");
+	DispatchKeyValue(skin, "model", sModel);
+	DispatchKeyValue(skin, "disablereceiveshadows", "1");
+	DispatchKeyValue(skin, "disableshadows", "1");
+	DispatchKeyValue(skin, "solid", "0");
+	DispatchKeyValue(skin, "spawnflags", "256");
+	SetEntProp(skin, Prop_Send, "m_CollisionGroup", 0);
+	DispatchSpawn(skin);
+	SetEntProp(skin, Prop_Send, "m_fEffects", EF_BONEMERGE|EF_NOSHADOW|EF_NORECEIVESHADOW);
+	SetVariantString("!activator");
+	AcceptEntityInput(skin, "SetParent", client, skin);
+	SetVariantString("primary");
+	AcceptEntityInput(skin, "SetParentAttachment", skin, skin, 0);
+	playerModels[client] = EntIndexToEntRef(skin);
+	playerModelsIndex[client] = skin;
+	return skin;
+}
+
+public void RemoveSkin(int client) {
+	if(IsValidEntity(playerModels[client])) {
+		AcceptEntityInput(playerModels[client], "Kill");
+	}
+	playerModels[client] = INVALID_ENT_REFERENCE;
+	playerModelsIndex[client] = -1;
+}
+
+
 
 public bool IsValidClient(int client) {
 	return (1 <= client && client <= MaxClients && IsClientInGame(client));
