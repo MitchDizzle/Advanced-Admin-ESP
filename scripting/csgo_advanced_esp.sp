@@ -30,7 +30,7 @@ public OnPluginStart() {
 	cColor[0] = CreateConVar("sm_advanced_esp_tcolor",  "192 160 96 64", "Determines R G B A glow colors for Terrorists team\nSet to \"0 0 0 0\" to disable",                      0);
 	cColor[1] = CreateConVar("sm_advanced_esp_ctcolor", "96 128 192 64", "Determines R G B A glow colors for Counter-Terrorists team\nFormat should be \"R G B A\" (with spaces)", 0);
 	cDefault = CreateConVar("sm_advanced_esp_default", "0", "Set to 1 if admins should automatically be given ESP", 0);
-	cLifeState = CreateConVar("sm_advanced_esp_lifestate", "0", "Set to 1 if admins should only see esp when dead, 2 to only seem esp while alive, 0 dead or alive.", 0);
+	cLifeState = CreateConVar("sm_advanced_esp_lifestate", "0", "Set to 1 if admins should only see esp when dead, 2 to only see esp while alive, 0 dead or alive.", 0);
 	cNotify = CreateConVar("sm_advanced_esp_notify", "0", "Set to 1 if giving and setting esp should notify the rest of the server.", 0);
 	AutoExecConfig(true, "csgo_advanced_esp");
 	cColor[0].AddChangeHook(ConVarChange);
@@ -124,9 +124,9 @@ public Action Command_ESP(client, args) {
 public void notifyServer(int client, char[] targetName, int status) {
 	if(cNotify.BoolValue) {
 		switch(status) {
-			case 0:  ShowActivity(client, "%t", "ESP Off", client, targetName);
-			case 1:  ShowActivity(client, "%t", "ESP On", client, targetName);
-			default: ShowActivity(client, "%t", "ESP Toggle", client, targetName);
+			case 0:  ShowActivity(client, "%t", "ESP Off", targetName);
+			case 1:  ShowActivity(client, "%t", "ESP On", targetName);
+			default: ShowActivity(client, "%t", "ESP Toggle", targetName);
 		}
 	}
 }
@@ -139,7 +139,11 @@ public void OnMapStart() {
 	resetPlayerVars(0);
 }
 
-public Action Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast) {
+public void OnClientDisconnect(int client) {
+	resetPlayerVars(client);
+}
+
+public void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast) {
 	if(cDefault.BoolValue) {
 		int client = GetClientOfUserId(event.GetInt("userid"));
 		if(client > 0 && client <= MaxClients && IsClientInGame(client) && CheckCommandAccess(client, "sm_esp", ADMFLAG_CHEATS, false)) {
@@ -147,7 +151,6 @@ public Action Event_PlayerSpawn(Event event, const char[] name, bool dontBroadca
 		}
 	}
 	checkGlows();
-	return Plugin_Continue;
 }
 
 public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast) {

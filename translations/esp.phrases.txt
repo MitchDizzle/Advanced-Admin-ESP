@@ -2,17 +2,17 @@
 {
 	"ESP Off"
 	{
-		"#format"		"{1:N} {2:t}"
-		"en"			"{1} took ESP from {2}."
+		"#format"		"{1:s}"
+		"en"			"took ESP from {1}."
 	}
 	"ESP On"
 	{
-		"#format"		"{1:N} {2:t}"
-		"en"			"{1} gave ESP to {2}."
+		"#format"		"{1:s}"
+		"en"			"gave ESP to {1}."
 	}
 	"ESP Toggle"
 	{
-		"#format"		"{1:N} {2:t}"
-		"en"			"{1} toggled ESP on {2}."
+		"#format"		"{1:s}"
+		"en"			"toggled ESP on {1}."
 	}
 }
