@@ -2,7 +2,7 @@
 #include <CustomPlayerSkins>
 
 #define PLUGIN_NAME    "Advanced Admin ESP"
-#define PLUGIN_VERSION "1.2.0"
+#define PLUGIN_VERSION "1.2.1"
 
 ConVar cColor[2];
 ConVar cDefault;
@@ -214,7 +214,7 @@ public void createGlows() {
 		}
 		//Create Skin
 		GetClientModel(client, model, sizeof(model));
-		skin = CPS_SetSkin(client, model, CPS_RENDER);
+		skin = CPS_SetSkin(client, model, CPS_RENDER|CPS_TRANSMIT);
 		if(skin > MaxClients && SDKHookEx(skin, SDKHook_SetTransmit, OnSetTransmit)) {
 			team = GetClientTeam(client)-2;
 			if(team >= 0) {
