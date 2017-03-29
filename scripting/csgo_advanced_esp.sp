@@ -24,7 +24,7 @@ int playerModelsIndex[MAXPLAYERS+1] = {-1,...};
 int playerTeam[MAXPLAYERS+1] = {0,...};
 
 #define PLUGIN_NAME    "Advanced Admin ESP"
-#define PLUGIN_VERSION "1.3.0"
+#define PLUGIN_VERSION "1.3.1"
 public Plugin myinfo = {
 	name        = PLUGIN_NAME,
 	author      = "Mitch",
@@ -346,7 +346,6 @@ public void SetupGlow(int entity, int color[4]) {
 	}
 }
 
-
 public int CreatePlayerModelProp(int client, char[] sModel) {
 	RemoveSkin(client);
 	int skin = CreateEntityByName("prop_dynamic_override");
@@ -357,6 +356,8 @@ public int CreatePlayerModelProp(int client, char[] sModel) {
 	DispatchKeyValue(skin, "spawnflags", "256");
 	SetEntProp(skin, Prop_Send, "m_CollisionGroup", 0);
 	DispatchSpawn(skin);
+	SetEntityRenderMode(skin, RENDER_TRANSALPHA);
+	SetEntityRenderColor(skin, 0, 0, 0, 0);
 	SetEntProp(skin, Prop_Send, "m_fEffects", EF_BONEMERGE|EF_NOSHADOW|EF_NORECEIVESHADOW);
 	SetVariantString("!activator");
 	AcceptEntityInput(skin, "SetParent", client, skin);
@@ -374,8 +375,6 @@ public void RemoveSkin(int client) {
 	playerModels[client] = INVALID_ENT_REFERENCE;
 	playerModelsIndex[client] = -1;
 }
-
-
 
 public bool IsValidClient(int client) {
 	return (1 <= client && client <= MaxClients && IsClientInGame(client));
