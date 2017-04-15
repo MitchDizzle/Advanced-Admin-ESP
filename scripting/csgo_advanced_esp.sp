@@ -24,7 +24,7 @@ int playerModelsIndex[MAXPLAYERS+1] = {-1,...};
 int playerTeam[MAXPLAYERS+1] = {0,...};
 
 #define PLUGIN_NAME    "Advanced Admin ESP"
-#define PLUGIN_VERSION "1.3.1"
+#define PLUGIN_VERSION "1.3.2"
 public Plugin myinfo = {
 	name        = PLUGIN_NAME,
 	author      = "Mitch",
@@ -189,7 +189,7 @@ public void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast
 }
 
 public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast) {
-	if(cLifeState.IntValue == 1) {
+	if(cLifeState.IntValue != 2) {
 		//Display glow to the dead.
 		int client = GetClientOfUserId(event.GetInt("userid"));
 		if(client > 0 && client <= MaxClients && IsClientInGame(client) && isUsingESP[client]) {
@@ -211,9 +211,6 @@ public void resetPlayerVars(int client) {
 		}
 		return;
 	}
-	if(isUsingESP[client]) {
-		playersInESP--;
-	}
 	isUsingESP[client] = false;
 	playerTeam[client] = 0;
 	if(IsClientInGame(client)) {
@@ -222,16 +219,11 @@ public void resetPlayerVars(int client) {
 }
 
 public bool getCanSeeEsp(int client, int lifestate) {
-	if(IsPlayerAlive(client)) {
-		if(lifestate != 1) {
-			return true;
-		}
-	} else {
-		if(lifestate == 1) {
-			return true;
-		}
+	switch(lifestate) {
+		case 1: return !IsPlayerAlive(client);
+		case 2: return IsPlayerAlive(client);
 	}
-	return false;
+	return true;
 }
 
 public void checkGlows() {
@@ -239,11 +231,11 @@ public void checkGlows() {
 	playersInESP = 0;
 	int lifestate = cLifeState.IntValue;
 	for(int client = 1; client <= MaxClients; client++) {
-		if(!IsClientInGame(client)) {
+		if(!IsClientInGame(client) && !isUsingESP[client]) {
 			continue;
 		}
 		canSeeESP[client] = getCanSeeEsp(client, lifestate);
-		if(isUsingESP[client] && canSeeESP[client]) {
+		if(canSeeESP[client]) {
 			playersInESP++;
 		}
 	}
@@ -273,6 +265,10 @@ public void createGlows() {
 	//Loop and setup a glow on alive players.
 	for(int client = 1; client <= MaxClients; client++) {
 		if(!IsClientInGame(client) || !IsPlayerAlive(client)) {
+			continue;
+		}
+		playerTeam[client] = GetClientTeam(client);
+		if(playerTeam[client] <= 1) {
 			continue;
 		}
 		//Create Skin
