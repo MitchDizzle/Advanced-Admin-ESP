@@ -24,7 +24,7 @@ int playerModelsIndex[MAXPLAYERS+1] = {-1,...};
 int playerTeam[MAXPLAYERS+1] = {0,...};
 
 #define PLUGIN_NAME    "Advanced Admin ESP"
-#define PLUGIN_VERSION "1.3.2"
+#define PLUGIN_VERSION "1.3.3"
 public Plugin myinfo = {
 	name        = PLUGIN_NAME,
 	author      = "Mitch",
@@ -60,6 +60,7 @@ public OnPluginStart() {
 
 	HookEvent("player_spawn", Event_PlayerSpawn);
 	HookEvent("player_death", Event_PlayerDeath);
+	HookEvent("round_end", Event_RoundEnd);
 
 	playersInESP = 0;
 }
@@ -197,6 +198,10 @@ public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast
 		}
 	}
 	checkGlows();
+}
+
+public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast) {
+	destoryGlows();
 }
 
 public void toggleGlow(int client, bool value) {
