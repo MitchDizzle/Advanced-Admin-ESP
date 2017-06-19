@@ -24,7 +24,7 @@ int playerModelsIndex[MAXPLAYERS+1] = {-1,...};
 int playerTeam[MAXPLAYERS+1] = {0,...};
 
 #define PLUGIN_NAME    "Advanced Admin ESP"
-#define PLUGIN_VERSION "1.3.3"
+#define PLUGIN_VERSION "1.3.4"
 public Plugin myinfo = {
 	name        = PLUGIN_NAME,
 	author      = "Mitch",
@@ -236,7 +236,9 @@ public void checkGlows() {
 	playersInESP = 0;
 	int lifestate = cLifeState.IntValue;
 	for(int client = 1; client <= MaxClients; client++) {
-		if(!IsClientInGame(client) && !isUsingESP[client]) {
+		if(!IsClientInGame(client) || !isUsingESP[client]) {
+			isUsingESP[client] = false;
+			canSeeESP[client] = false;
 			continue;
 		}
 		canSeeESP[client] = getCanSeeEsp(client, lifestate);
