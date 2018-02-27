@@ -1,13 +1,14 @@
 #include <sdktools>
 #include <sdkhooks>
 
-#define EF_BONEMERGE                (1 << 0)
-#define EF_NOSHADOW                 (1 << 4)
-#define EF_NORECEIVESHADOW          (1 << 6)
+#define EF_BONEMERGE		(1 << 0)
+#define EF_NOSHADOW			(1 << 4)
+#define EF_NORECEIVESHADOW	(1 << 6)
 
 ConVar cColor[2];
 ConVar cDefault;
 ConVar cLifeState;
+ConVar cRestrictTeam;
 ConVar cNotify;
 ConVar cTeam;
 
@@ -23,14 +24,14 @@ int playerModelsIndex[MAXPLAYERS+1] = {-1,...};
 
 int playerTeam[MAXPLAYERS+1] = {0,...};
 
-#define PLUGIN_NAME    "Advanced Admin ESP"
-#define PLUGIN_VERSION "1.3.4"
+#define PLUGIN_NAME		"Advanced Admin ESP"
+#define PLUGIN_VERSION	"1.3.5"
 public Plugin myinfo = {
-	name        = PLUGIN_NAME,
-	author      = "Mitch",
-	description = "Allow admins to use a server side ESP/WH",
-	version     = PLUGIN_VERSION,
-	url         = "mtch.tech"
+	name		= PLUGIN_NAME,
+	author		= "Mitch",
+	description	= "Allow admins to use a server side ESP/WH",
+	version		= PLUGIN_VERSION,
+	url			= "mtch.tech"
 };
 
 public OnPluginStart() {
@@ -41,12 +42,14 @@ public OnPluginStart() {
 	cColor[1] = CreateConVar("sm_advanced_esp_ctcolor", "72 96 144", "Determines R G B glow colors for Counter-Terrorists team\nFormat should be \"R G B\" (with spaces)", 0);
 	cDefault = CreateConVar("sm_advanced_esp_default", "0", "Set to 1 if admins should automatically be given ESP", 0);
 	cLifeState = CreateConVar("sm_advanced_esp_lifestate", "0", "Set to 1 if admins should only see esp when dead, 2 to only see esp while alive, 0 dead or alive.", 0);
+	cRestrictTeam = CreateConVar("sm_advanced_esp_restrictteam", "0", "Set to restrict esp to only be viewed by a certain team, 0 - Off", 0);
 	cNotify = CreateConVar("sm_advanced_esp_notify", "0", "Set to 1 if giving and setting esp should notify the rest of the server.", 0);
 	cTeam = CreateConVar("sm_advanced_esp_team", "0", "0 - Display all teams, 1 - Display enemy, 2 - Display teammates", 0);
 	AutoExecConfig(true, "csgo_advanced_esp");
 	cColor[0].AddChangeHook(ConVarChange);
 	cColor[1].AddChangeHook(ConVarChange);
 	cLifeState.AddChangeHook(ConVarChange);
+	cRestrictTeam.AddChangeHook(ConVarChange);
 	cTeam.AddChangeHook(ConVarChange);
 	for(int i = 0; i <= 1; i++) {
 		retrieveColorValue(i);
@@ -223,7 +226,10 @@ public void resetPlayerVars(int client) {
 	}
 }
 
-public bool getCanSeeEsp(int client, int lifestate) {
+public bool getCanSeeEsp(int client, int lifestate, int restrictTeam) {
+	if(restrictTeam > 0 && playerTeam[client] != restrictTeam) {
+		return false;
+	}
 	switch(lifestate) {
 		case 1: return !IsPlayerAlive(client);
 		case 2: return IsPlayerAlive(client);
@@ -235,13 +241,14 @@ public void checkGlows() {
 	//Check to see if some one has a glow enabled.
 	playersInESP = 0;
 	int lifestate = cLifeState.IntValue;
+	int restrictTeam = cRestrictTeam.IntValue;
 	for(int client = 1; client <= MaxClients; client++) {
 		if(!IsClientInGame(client) || !isUsingESP[client]) {
 			isUsingESP[client] = false;
 			canSeeESP[client] = false;
 			continue;
 		}
-		canSeeESP[client] = getCanSeeEsp(client, lifestate);
+		canSeeESP[client] = getCanSeeEsp(client, lifestate, restrictTeam);
 		if(canSeeESP[client]) {
 			playersInESP++;
 		}
