@@ -108,10 +108,13 @@ public Action Command_GiveESP(client, args) {
     for(int i = 0; i < clientCount; i++) {
         if(!IsClientInGame(clientList[i])) continue;
         if(args > 1) {
-            toggleGlow(clientList[i], value);
+            isUsingESP[clientList[i]] = value;
         } else {
-            toggleGlow(clientList[i], !isUsingESP[clientList[i]]);
+            isUsingESP[clientList[i]] = !isUsingESP[clientList[i]];
         }
+    }
+    if(clientCount > 0) {
+        checkGlows();
     }
     notifyServer(client, targetName, (args > 1) ? (value ? 1 : 0) : 2);
     return Plugin_Handled;
@@ -311,20 +314,20 @@ public setGlowTeam(int skin, int team) {
 }
 
 public Action OnSetTransmit_All(int entity, int client) {
-    if(isUsingESP[client] && canSeeESP[client] && playerModelsIndex[client] != entity) {
+    if(canSeeESP[client] && playerModelsIndex[client] != entity) {
         return Plugin_Continue;
     }
     return Plugin_Stop;
 }
     
 public Action OnSetTransmit_T(int entity, int client) {
-    if(isUsingESP[client] && canSeeESP[client] && playerModelsIndex[client] != entity && playerTeam[client] == 2) {
+    if(canSeeESP[client] && playerModelsIndex[client] != entity && playerTeam[client] == 2) {
         return Plugin_Continue;
     }
     return Plugin_Handled;
 }
 public Action OnSetTransmit_CT(int entity, int client) {
-    if(isUsingESP[client] && canSeeESP[client] && playerModelsIndex[client] != entity && playerTeam[client] == 3) {
+    if(canSeeESP[client] && playerModelsIndex[client] != entity && playerTeam[client] == 3) {
         return Plugin_Continue;
     }
     return Plugin_Handled;
