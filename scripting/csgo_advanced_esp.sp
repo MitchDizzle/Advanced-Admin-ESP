@@ -5,11 +5,19 @@
 #define EF_NOSHADOW                 (1 << 4)
 #define EF_NORECEIVESHADOW          (1 << 6)
 
+#define HEADSCALE 1.0
+//#define HEADPROP "models/props/de_dust/hr_dust/dust_soccerball/dust_soccer_ball001.mdl"
+#define HEADPROP "models/player/holiday/facemasks/facemask_tf2_spy_model.mdl"
+#define HEADATTACH "facemask"
+
+#define NORMATTACH "primary"
+
 ConVar cColor[2];
 ConVar cDefault;
 ConVar cLifeState;
 ConVar cNotify;
 ConVar cTeam;
+ConVar cModel;
 
 int colors[2][4];
 
@@ -24,7 +32,7 @@ int playerModelsIndex[MAXPLAYERS+1] = {-1,...};
 int playerTeam[MAXPLAYERS+1] = {0,...};
 
 #define PLUGIN_NAME    "Advanced Admin ESP"
-#define PLUGIN_VERSION "1.3.5"
+#define PLUGIN_VERSION "1.3.6"
 public Plugin myinfo = {
     name        = PLUGIN_NAME,
     author      = "Mitch",
@@ -43,11 +51,13 @@ public OnPluginStart() {
     cLifeState = CreateConVar("sm_advanced_esp_lifestate", "0", "Set to 1 if admins should only see esp when dead, 2 to only see esp while alive, 0 dead or alive.", 0);
     cNotify = CreateConVar("sm_advanced_esp_notify", "0", "Set to 1 if giving and setting esp should notify the rest of the server.", 0);
     cTeam = CreateConVar("sm_advanced_esp_team", "0", "0 - Display all teams, 1 - Display enemy, 2 - Display teammates", 0);
+    cModel = CreateConVar("sm_advanced_esp_model", "0", "0 - Use current model (full body glow), 1 - Use facemask model on head", 0);
     AutoExecConfig(true, "csgo_advanced_esp");
     cColor[0].AddChangeHook(ConVarChange);
     cColor[1].AddChangeHook(ConVarChange);
     cLifeState.AddChangeHook(ConVarChange);
     cTeam.AddChangeHook(ConVarChange);
+    cModel.AddChangeHook(ConVarChange);
     for(int i = 0; i <= 1; i++) {
         retrieveColorValue(i);
     }
@@ -153,6 +163,7 @@ public OnPluginEnd() {
 }
 
 public void OnMapStart() {
+    PrecacheModel(HEADPROP);
     resetPlayerVars(0);
 }
 
@@ -270,8 +281,18 @@ public void destoryGlows() {
 
 public void createGlows() {
     char model[PLATFORM_MAX_PATH];
+    char attachment[PLATFORM_MAX_PATH];
     int skin = -1;
     int showTeam = cTeam.IntValue;
+    int useModel = cModel.IntValue;
+    float scale = 1.0;
+    if(useModel) {
+        model = HEADPROP;
+        attachment = HEADATTACH;
+        scale = HEADSCALE;
+    } else {
+        attachment = NORMATTACH;
+    }
     //Loop and setup a glow on alive players.
     for(int client = 1; client <= MaxClients; client++) {
         if(!IsClientInGame(client) || !IsPlayerAlive(client)) {
@@ -282,8 +303,10 @@ public void createGlows() {
             continue;
         }
         //Create Skin
-        GetClientModel(client, model, sizeof(model));
-        skin = CreatePlayerModelProp(client, model);
+        if(!useModel) {
+            GetClientModel(client, model, sizeof(model));
+        }
+        skin = CreatePlayerModelProp(client, model, attachment, !useModel, scale);
         if(skin > MaxClients) {
             playerTeam[client] = GetClientTeam(client);
             if(showTeam == 1) {
@@ -342,7 +365,7 @@ public void SetupGlow(int entity, int color[4]) {
     }
 
     // Enable glow for custom skin
-    SetEntProp(entity, Prop_Send, "m_bShouldGlow", true, true);
+    SetEntProp(entity, Prop_Send, "m_bShouldGlow", true);
     SetEntProp(entity, Prop_Send, "m_nGlowStyle", 0);
     SetEntPropFloat(entity, Prop_Send, "m_flGlowMaxDist", 10000.0);
 
@@ -352,25 +375,30 @@ public void SetupGlow(int entity, int color[4]) {
     }
 }
 
-public int CreatePlayerModelProp(int client, char[] sModel) {
+public int CreatePlayerModelProp(int client, char[] sModel, char[] attachment, bool bonemerge, float scale) {
     RemoveSkin(client);
     int skin = CreateEntityByName("prop_dynamic_glow");
     DispatchKeyValue(skin, "model", sModel);
-    //DispatchKeyValue(skin, "disablereceiveshadows", "1");
-    //DispatchKeyValue(skin, "disableshadows", "1");
     DispatchKeyValue(skin, "solid", "0");
-    DispatchKeyValue(skin, "fademindist", "0.0");
-    DispatchKeyValue(skin, "fademaxdist", "1.0");
-    //DispatchKeyValue(skin, "spawnflags", "256");
+    DispatchKeyValue(skin, "fademindist", "1");
+    DispatchKeyValue(skin, "fademaxdist", "1");
+    DispatchKeyValue(skin, "fadescale", "2.0");
     SetEntProp(skin, Prop_Send, "m_CollisionGroup", 0);
     DispatchSpawn(skin);
     SetEntityRenderMode(skin, RENDER_GLOW);
     SetEntityRenderColor(skin, 0, 0, 0, 0);
-    SetEntProp(skin, Prop_Send, "m_fEffects", EF_BONEMERGE);
+    if(bonemerge) {
+        SetEntProp(skin, Prop_Send, "m_fEffects", EF_BONEMERGE);
+    }
+    if(scale != 1.0) {
+        SetEntPropFloat(skin, Prop_Send, "m_flModelScale", scale);
+    }
     SetVariantString("!activator");
     AcceptEntityInput(skin, "SetParent", client, skin);
-    SetVariantString("primary");
+    SetVariantString(attachment);
     AcceptEntityInput(skin, "SetParentAttachment", skin, skin, 0);
+    SetVariantString("OnUser1 !self:Kill::0.1:-1");
+    AcceptEntityInput(skin, "AddOutput");
     playerModels[client] = EntIndexToEntRef(skin);
     playerModelsIndex[client] = skin;
     return skin;
@@ -379,7 +407,8 @@ public int CreatePlayerModelProp(int client, char[] sModel) {
 public void RemoveSkin(int client) {
     int index = EntRefToEntIndex(playerModels[client]);
     if(index > MaxClients && IsValidEntity(index)) {
-        AcceptEntityInput(index, "Kill");
+        SetEntProp(index, Prop_Send, "m_bShouldGlow", false);
+        AcceptEntityInput(index, "FireUser1");
     }
     playerModels[client] = INVALID_ENT_REFERENCE;
     playerModelsIndex[client] = -1;
